@@ -2,6 +2,10 @@
 
 using namespace std;
 
+#define CACHE_MAX_SIZE 128
+#define BLOCK_SIZE 16
+#define RAM_SIZE 65536
+
 char get_hex(int i) {
     return (i > 9) ? ('A' + (i - 10)) : ('0' + i); // Adjusted i - 10 for proper hex calculation
 }
@@ -17,7 +21,7 @@ int get_offset(string address) {
 class Block {
 public:
     string tag;
-    int size = 16;
+    int size = BLOCK_SIZE;
     vector<string> words = vector<string>(size);
 
     Block() {
@@ -44,11 +48,13 @@ public:
 class RAM {
 private:
     map<string, Block> block_map; // Map tags to blocks
+    int ram_blocks = RAM_SIZE / BLOCK_SIZE; //4096
 
 public:
     // Constructor: Assign address for blocks from 0000H to FFFFH
     RAM() {
         for (int i = 0; i < 16; i++) {
+            // each bit is actually a nibble
             char first_bit = get_hex(i);
             for (int j = 0; j < 16; j++) {
                 char second_bit = get_hex(j);
@@ -98,7 +104,7 @@ class CacheBlock {
             this->block = block;
             this->valid = true;
             this->dirty = false;
-            this->last_used = 0;
+            //this->last_used = 0;
         }
 
         void set_invalid() {
@@ -110,8 +116,23 @@ class CacheBlock {
 
 class Cache {
     private:
-        int size = 128;
+
+        int size = CACHE_MAX_SIZE;
         vector<CacheBlock> cache_blocks;
+
+        void evict_block(int index) {
+            //just remove the index block
+            cache_blocks[index].set_invalid();
+        }
+
+        void update_LRU(int index) {
+            cache_blocks[index].last_used = 0;
+            for (int i = 0; i < this->size; i++) {
+                if (i != index && cache_blocks[i].valid) {
+                    cache_blocks[i].last_used++;
+                }
+            }
+        }
 
     public:
         Cache() {
@@ -131,9 +152,17 @@ class Cache {
             for (int i = 0; i < this->size; i++) {
                 if (!cache_blocks[i].valid) {
                     cache_blocks[i].set_block(block);
-                    break;
+                    printf("Block %s fetched from RAM\n", tag.c_str());
+                    update_LRU(i);
+                    return;
                 }
             }
+            //LRU
+            int remove_index = LRU();
+            evict_block(remove_index);
+            cache_blocks[remove_index].set_block(block);
+            update_LRU(remove_index);
+            printf("Cache block %d evicted, Block %s fetched from RAM\n", remove_index, tag.c_str());
         }
 
         void search(string address) {
@@ -142,7 +171,9 @@ class Cache {
             for (int i = 0; i < this->size; i++) {
                 if (cache_blocks[i].valid && cache_blocks[i].block.tag == tag) {
                     miss = false;
-                    cout << "Cache hit" << endl;
+                    cout << "Cache hit, updating " << i <<"th block" << endl;
+                    
+                    update_LRU(i);
                     return;
                 }
             }
@@ -153,13 +184,31 @@ class Cache {
             }
         }
 
-        void evict_block();
+        //returns the oldest block
+        int LRU() {
+            int max = 0;
+            int index = 0;
+            for (int i = 0; i < this->size; i++) {
+                if (cache_blocks[i].valid && cache_blocks[i].last_used > max) {
+                    max = cache_blocks[i].last_used;
+                    index = i;
+                }
+            }
+            return index;
+        }
 };
 
 int main() {
     Cache cache;
+   
+   //tests for 4096 blocks & total stats
+    cache.search("F23BH");
+     cache.search("F21BH");
+      cache.search("F22BH");
+       cache.search("F13BH");
+        cache.search("F23BH");
+         cache.search("F23CH");
+          cache.search("FE2BH");
 
-    string address = "F23BH";
-    cout << get_tag(address) << " " << get_offset(address) << endl;
     return 0;
 }

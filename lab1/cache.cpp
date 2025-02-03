@@ -2,9 +2,12 @@
 
 using namespace std;
 
-#define CACHE_MAX_SIZE 128
-#define BLOCK_SIZE 16
-#define RAM_SIZE 65536
+#define WORD_SIZE 4 //bytes
+#define CACHE_MAX_SIZE 128 //blocks
+#define BLOCK_SIZE 16 //words
+#define RAM_SIZE 65536 //words
+
+int searches=0, hits=0, misses=0;
 
 char get_hex(int i) {
     return (i > 9) ? ('A' + (i - 10)) : ('0' + i); // Adjusted i - 10 for proper hex calculation
@@ -169,16 +172,20 @@ class Cache {
             string tag = get_tag(address);
             bool miss = true;
             for (int i = 0; i < this->size; i++) {
-                if (cache_blocks[i].valid && cache_blocks[i].block.tag == tag) {
-                    miss = false;
-                    cout << "Cache hit, updating " << i <<"th block" << endl;
-                    
-                    update_LRU(i);
-                    return;
+                if (cache_blocks[i].valid) {
+                    searches++;
+                    if(cache_blocks[i].block.tag == tag){
+                        miss = false;
+                        cout << "Cache hit, updating " << i <<"th block" << endl;
+                        hits++;
+                        update_LRU(i);
+                        return;
+                    }
                 }
             }
             if(miss) {
                 cout << "Cache miss" << endl;
+                misses++;
                 fetch_RAM(address);
                 
             }
@@ -197,18 +204,67 @@ class Cache {
             return index;
         }
 };
+Cache cache;
+
+void stats(){
+    double hit_rate = (double)hits / (hits + misses) * 100;
+    double miss_rate = (double)misses / (hits + misses) * 100;
+
+    cout << "Hits: " << hits << endl;
+    cout << "Misses: " << misses << endl;
+    cout << "Searches: " << searches << endl;
+    cout << "Hit rate: " << hit_rate << "%" << endl;
+    cout << "Miss rate: " << miss_rate << "%" << endl;
+}
+
+void spatial_test(int prog_size=2048){
+    //test for showing spatial locality
+    int num_blocks = prog_size / (WORD_SIZE * BLOCK_SIZE);
+    //generate random tag
+
+    for(int b=0;b<num_blocks;b++){
+        string rand_tag = "";
+        rand_tag += get_hex(rand() % 16);
+        rand_tag += get_hex(rand() % 16);
+        rand_tag += get_hex(rand() % 16);
+
+        for(int i=0;i<16;i++){
+            string address = rand_tag;
+            address += get_hex(i);
+
+            cache.search(address);
+        }
+    }
+
+    stats();
+}
+
+void temporal_test(){
+    return;
+}
 
 int main() {
-    Cache cache;
-   
    //tests for 4096 blocks & total stats
-    cache.search("F23BH");
-     cache.search("F21BH");
-      cache.search("F22BH");
-       cache.search("F13BH");
-        cache.search("F23BH");
-         cache.search("F23CH");
-          cache.search("FE2BH");
+    // cache.search("F23BH");
+    // cache.search("F21BH");
+    // cache.search("F22BH");
+    // cache.search("F13BH");
+    // cache.search("F23BH");
+    // cache.search("F23CH");
+    // cache.search("FE2BH");
+
+    //generate test for showing cache functionality
+    // for (int i = 0; i < 4096; i++) {
+    //     string address = "";
+    //     address += get_hex(rand() % 16);
+    //     address += get_hex(rand() % 16);
+    //     address += get_hex(rand() % 16);
+    //     address += get_hex(rand() % 16);
+
+    //     cache.search(address);
+    // }
+
+    spatial_test();
 
     return 0;
 }

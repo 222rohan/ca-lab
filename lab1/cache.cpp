@@ -239,8 +239,40 @@ void spatial_test(int prog_size=2048){
     stats();
 }
 
-void temporal_test(){
-    return;
+void temporal_test(int num_loops=5){
+    //generate 3 random tags
+    string tags[3];
+    for(int i=0;i<3;i++){
+        tags[i] += get_hex(rand() % 16);
+        tags[i] += get_hex(rand() % 16);
+        tags[i] += get_hex(rand() % 16);
+    }
+
+    //generate 3 random addresses
+    string addresses[3];
+    for(int i=0;i<3;i++){
+        addresses[i] = tags[i];
+        addresses[i] += get_hex(rand() % 16);
+    }
+
+    //search for the 3 addresses
+    for(int i=0;i<3;i++){
+        cache.search(addresses[i]);
+    }
+
+    //loop through each word in the tags and search for them 5 times
+    for(int i=0;i<num_loops;i++){
+        for(int j=0;j<3;j++){
+            for(int k=0;k<16;k++){
+                string address = tags[j];
+                address += get_hex(k);
+
+                cache.search(address);
+            }
+        }
+    }
+
+    stats();
 }
 
 int main() {
@@ -264,7 +296,9 @@ int main() {
     //     cache.search(address);
     // }
 
-    spatial_test();
+    // spatial_test();
+
+    temporal_test();
 
     return 0;
 }

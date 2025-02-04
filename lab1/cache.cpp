@@ -1,5 +1,7 @@
-#include <bits/stdc++.h>
+//CS22B1060 Rohan Shenoy
+//CS22B1083 Dharun Thota
 
+#include <bits/stdc++.h>
 using namespace std;
 
 #define WORD_SIZE 4 //bytes
@@ -155,7 +157,7 @@ class Cache {
             for (int i = 0; i < this->size; i++) {
                 if (!cache_blocks[i].valid) {
                     cache_blocks[i].set_block(block);
-                    printf("Block %s fetched from RAM\n", tag.c_str());
+                    //printf("Block %s fetched from RAM\n", tag.c_str());
                     update_LRU(i);
                     return;
                 }
@@ -165,7 +167,7 @@ class Cache {
             evict_block(remove_index);
             cache_blocks[remove_index].set_block(block);
             update_LRU(remove_index);
-            printf("Cache block %d evicted, Block %s fetched from RAM\n", remove_index, tag.c_str());
+            //printf("Cache block %d evicted, Block %s fetched from RAM\n", remove_index, tag.c_str());
         }
 
         void search(string address) {
@@ -176,7 +178,7 @@ class Cache {
                     searches++;
                     if(cache_blocks[i].block.tag == tag){
                         miss = false;
-                        cout << "Cache hit, updating " << i <<"th block" << endl;
+                        //cout << "Cache hit, updating " << i <<"th block" << endl;
                         hits++;
                         update_LRU(i);
                         return;
@@ -184,7 +186,7 @@ class Cache {
                 }
             }
             if(miss) {
-                cout << "Cache miss" << endl;
+                //cout << "Cache miss" << endl;
                 misses++;
                 fetch_RAM(address);
                 
@@ -214,13 +216,37 @@ void stats(){
     cout << "Misses: " << misses << endl;
     cout << "Searches: " << searches << endl;
     cout << "Hit rate: " << hit_rate << "%" << endl;
-    cout << "Miss rate: " << miss_rate << "%" << endl;
+    cout << "Miss rate: " << miss_rate << "%\n" << endl;
+
+    hits = 0;
+    misses = 0;
+    searches = 0;
+}
+
+void random_test(){
+    //test for random addresses
+
+    cout << "Random Test" << endl;
+
+    for (int i = 0; i < 256; i++) {
+        string address = "";
+        address += get_hex(rand() % 16);
+        address += get_hex(rand() % 16);
+        address += get_hex(rand() % 16);
+        address += get_hex(rand() % 16);
+
+        cache.search(address);
+    }
+
+    stats();
 }
 
 void spatial_test(int prog_size=2048){
     //test for showing spatial locality
     int num_blocks = prog_size / (WORD_SIZE * BLOCK_SIZE);
     //generate random tag
+
+    cout << "Spatial Locality Test" << endl;
 
     for(int b=0;b<num_blocks;b++){
         string rand_tag = "";
@@ -260,6 +286,8 @@ void temporal_test(int num_loops=5){
         cache.search(addresses[i]);
     }
 
+    cout << "Temporal Localilty Test" << endl;
+
     //loop through each word in the tags and search for them 5 times
     for(int i=0;i<num_loops;i++){
         for(int j=0;j<3;j++){
@@ -285,18 +313,9 @@ int main() {
     // cache.search("F23CH");
     // cache.search("FE2BH");
 
-    //generate test for showing cache functionality
-    // for (int i = 0; i < 4096; i++) {
-    //     string address = "";
-    //     address += get_hex(rand() % 16);
-    //     address += get_hex(rand() % 16);
-    //     address += get_hex(rand() % 16);
-    //     address += get_hex(rand() % 16);
+    random_test();
 
-    //     cache.search(address);
-    // }
-
-    // spatial_test();
+    spatial_test();
 
     temporal_test();
 

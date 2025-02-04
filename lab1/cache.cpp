@@ -9,6 +9,7 @@ using namespace std;
 #define BLOCK_SIZE 16 //words
 #define RAM_SIZE 65536 //words
 
+//searches mean going through every valid block in the cache
 int searches=0, hits=0, misses=0;
 
 char get_hex(int i) {
@@ -150,6 +151,9 @@ class Cache {
         //     }
         // }
 
+        //fetches the block from RAM and stores it in the cache
+        //if the cache is full, evict the LRU block
+        //if the block is already in the cache, update the LRU
         void fetch_RAM(string address) {
             string tag = get_tag(address);
             Block block = ram.get_block(tag);
@@ -205,6 +209,12 @@ class Cache {
             }
             return index;
         }
+
+        void clear() {
+            for (int i = 0; i < this->size; i++) {
+                cache_blocks[i].set_invalid();
+            }
+        }
 };
 Cache cache;
 
@@ -221,6 +231,8 @@ void stats(){
     hits = 0;
     misses = 0;
     searches = 0;
+
+    cache.clear();
 }
 
 void random_test(){

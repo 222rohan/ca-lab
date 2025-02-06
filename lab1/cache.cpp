@@ -218,6 +218,7 @@ class Cache {
 };
 Cache cache;
 
+//prints the statistics
 void stats(){
     double hit_rate = (double)hits / (hits + misses) * 100;
     double miss_rate = (double)misses / (hits + misses) * 100;
@@ -235,6 +236,14 @@ void stats(){
     cache.clear();
 }
 
+// --tests--
+
+/*
+Random Test
+This test is to show that the cache is able to handle random addresses
+and fetch the blocks from RAM when needed
+Number misses should be high as the addresses are random
+*/
 void random_test(){
     //test for random addresses
 
@@ -252,7 +261,13 @@ void random_test(){
 
     stats();
 }
+/*
+Spatial Locality Test
 
+This test is to show that the cache is able to handle spatial locality
+Number of misses should be low as the addresses are close to each other
+Each miss should fetch a new block from RAM
+*/
 void spatial_test(int prog_size=2048){
     //test for showing spatial locality
     int num_blocks = prog_size / (WORD_SIZE * BLOCK_SIZE);
@@ -276,6 +291,14 @@ void spatial_test(int prog_size=2048){
 
     stats();
 }
+
+/*
+Temporal Locality Test
+
+This test loops through the same addresses multiple times,
+it first gets 3 random blocks from RAM and then loops through each word in the block 5 times
+Number of misses should be low as the addresses are close to each other, and repeatedly accessed
+*/
 
 void temporal_test(int num_loops=5){
     //generate 3 random tags
@@ -316,14 +339,9 @@ void temporal_test(int num_loops=5){
 }
 
 int main() {
-   //tests for 4096 blocks & total stats
-    // cache.search("F23BH");
-    // cache.search("F21BH");
-    // cache.search("F22BH");
-    // cache.search("F13BH");
-    // cache.search("F23BH");
-    // cache.search("F23CH");
-    // cache.search("FE2BH");
+
+    //use case example: word - 0F0FH
+    //cache.search("0F0FH");
 
     random_test();
 

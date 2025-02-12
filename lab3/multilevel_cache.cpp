@@ -376,7 +376,8 @@ class SetAssociativeCache{
             int index = get_index(address);
             //search for the block in the cache
             for(int i=0;i<set_block_size;i++){
-                if(set_blocks[index].blocks[i].valid && set_blocks[index].blocks[i].block.tag == tag){
+                string tag_bin = get_tag(get_binary(set_blocks[index].blocks[i].block.tag));
+                if(set_blocks[index].blocks[i].valid && tag_bin == tag){
                     //if the block is found, update the LRU
                     cout << "L2 Cache hit" << endl;
                     l2_hits++;
@@ -393,6 +394,45 @@ class SetAssociativeCache{
 };
 SetAssociativeCache L2;
 
+class VictimCache{
+    vector<Block> blocks;
+    int size = 4;
+    int fifo_index; 
+
+    string get_tag(string address){
+        return address.substr(0, 3);
+    }
+
+    public:
+        VictimCache(){
+            this->blocks = vector<Block>(this->size);
+            this->fifo_index = 0;
+        }
+
+        void add_block(Block block){
+            blocks[fifo_index] = block;
+            fifo_index = (fifo_index + 1) % size;
+        }
+
+        Block search(string nib_addr){
+            string address = get_binary(nib_addr);
+            string tag = get_tag(nib_addr);
+            for(int i=0;i<this->size;i++){
+                cout << "extracted tag: " << tag << " actual tag: " << blocks[i].tag << endl; 
+                if(blocks[i].tag == tag){
+                    cout << "Victim Cache hit" << endl;
+                    return blocks[i];
+                }
+            }
+            cout << "Victim Cache miss" << endl;
+            //fetch the block from L2 cache
+            return L2.search(nib_addr);
+        }
+
+        friend class DirectMappedCache;
+};
+VictimCache VC;
+
 class DirectMappedCache {
     int size;
     vector<CacheBlock> cache_blocks;
@@ -400,10 +440,39 @@ class DirectMappedCache {
     // l1 address structure  [tag 0:3][block index 5:11][word offset 12:15]
 
     string get_tag(string address){
-        return get_bits(address, 0, 3);
+        return get_bits(address, 0, 4);
     }
     int get_block(string address){
         return stoi(get_bits(address, 5, 11), nullptr, 2);
+    }
+
+    /*
+        gets the i+1th block address 
+        cur_address - 4 nibble address
+        next_address - 4 nibble address with +1 to the 3rd nibble
+        for ex: prefetch based on block tag
+        0F0F -> 0F1F
+          ^
+          0 + 1 = 1
+
+        edge case: if the block is the last block in the cache
+        0FFF -> 100F
+          ^ 
+          F + 1 = 0 [ +1 carry ]
+    */
+    Block prefetch_after_address(string cur_address){
+            //get first 3 bytes of the address
+        string tag = cur_address.substr(0, 3);
+        cout << "Tag: " << tag << endl;
+        int nextaddr_int = hexaddr_to_int(tag) + 1;
+        string next_address = "";
+        string next_address_tag = int_to_hexaddr(nextaddr_int);
+        if(nextaddr_int == 4096)
+            next_address = "0000";
+        else
+            next_address = next_address_tag + "0";
+
+        return ram.get_block(next_address);
     }
 
     public:
@@ -432,7 +501,7 @@ class DirectMappedCache {
                 NOTE: prefetch and stuff to be added later 
             */
            // ram has 12 bit tag but we need 4 bit tag
-            string tag_bin = get_binary(cache_blocks[block_index].block.tag);
+            string tag_bin = get_tag(get_binary(cache_blocks[block_index].block.tag));
             cout << "Tag in cache: " << tag_bin << endl;
             if(cache_blocks[block_index].valid &&  tag_bin == tag){
                 cout << "L1 Cache hit" << endl;
@@ -441,14 +510,19 @@ class DirectMappedCache {
             } else{
                 cout << "L1 Cache miss" << endl;
                 l1_misses++;
+                if(cache_blocks[block_index].valid && tag_bin != tag){
+                    //if the block is valid but the tag doesn't match, then it is a conflict miss
+                    //put this block in the victim cache
+                    VC.add_block(cache_blocks[block_index].block);
+                }
+                
                 //fetch 'Block' from L2 cache
-                Block fetched_BL2 = L2.search(nib_addr);
+                Block fetched_BL2 = VC.search(nib_addr);
                 cache_blocks[block_index].set_block(fetched_BL2);
                 cout << cache_blocks[block_index].valid << endl;
             }
             
         }
-
 };
 
 
@@ -465,6 +539,9 @@ class DirectMappedCache {
         will be used to prefetch data from RAM
         Prefetching technique - when the ith block is accessed,
             the (i+1)th block is prefetched into DSB
+            
+    Both the ISB and DSB will have a size of 4 blocks
+    eviction policy - FIFO (fifo_index)
 
 */
 class StreamBuffer {
@@ -472,14 +549,21 @@ class StreamBuffer {
         vector<Block> blocks;
         int size;
         int fifo_index; 
-        vector<bool> consumed;
         
     public:
         StreamBuffer(int size = 4){
             this->size = size;
             this->blocks = vector<Block>(size);
             this->fifo_index = 0;
-            this->consumed = vector<bool>(size);
+        }
+        
+        void fetch_block(string address){
+            //fetch the block from RAM
+            Block block = ram.get_block(address);
+            //store the block in the stream buffer
+            blocks[fifo_index] = block;
+            //update the fifo index
+            fifo_index = (fifo_index + 1) % size;
         }
 
 };
@@ -620,6 +704,8 @@ int main() {
    L1.search("0000"); // 0000 0000 0000 0000
    L1.search("0001"); // 0000 0000 0000 0001
    L2.search("0000"); // 0000 0000 0000 0000
+   L1.search("1000"); 
+   L1.search("0000");
 
     return 0;
 }

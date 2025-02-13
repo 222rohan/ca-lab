@@ -85,6 +85,44 @@ int get_offset(string address) {
     return stoi(address.substr(3, 1), nullptr, 16); // Use stoi() with base 16 to convert hex to int
 }
 
+/*
+
+                                    +-------------+
+                                    |  Processor  |
+                                    +------+------+  
+                                        │ - REQUEST ADDRESS
+                                        ▼
+                                    +-------------+
+                                    |   L1 Cache  |   > DIRECT MAPPED 
+                                    +------+------+  
+                                        │                                  
+           EVICT TO ▼                   ├────────► +-------------------+
+          +----------------+            │          | Instruction Stream|
+          |   Victim       |<-----------│          | Buffer (ISB)      |
+          |   Cache        │            |          +-------------------+  
+          +----------------+            │              ^PREFETCH FROM▼
+                                        ├-───────► +-------------------+
+           WRITE THROUGH▼               │          | Data Stream Buffer|
+          +----------------+            │          | (DSB)             |
+          |  Write Buffer  |<-----------│          +-------------------+
+          |                |            │
+          +----------------+            │
+                                        ├
+                                        │
+                                        ▼
+                                    +-------------+
+                                    |   L2 Cache  |   > SET ASSOCIATIVE (4 WAY)
+                                    +------+------+  
+                                        │
+                                        ▼
+                                    +-------------+
+                                    |    RAM      |   > BLOCK SIZE 16 WORDS
+                                    +-------------+
+
+
+*/
+
+
 class Block {
 public:
     string tag;
@@ -472,7 +510,9 @@ class DirectMappedCache {
         else
             next_address = next_address_tag + "0";
 
-        return ram.get_block(next_address);
+        // call StreamBuffer to fetch the block
+        // need to take care of ISB, DSB
+        // ISB.fetch_block(next_address); or DSB.fetch_block(next_address);
     }
 
     public:
@@ -493,12 +533,11 @@ class DirectMappedCache {
             cout << "Tag: " << tag << endl;
             
             /* 
-                now we need to search for the block in the cache
-                direct mapping to access block using block_index
-                if the block is valid and the tag matches, then it is a hit
-                else it is a miss
-                for misses we fetch from L2 cache
-                NOTE: prefetch and stuff to be added later 
+                to do:
+                A) SEARCH 
+                    1) searched prefetched ISB/DSB
+                    2) victim cache
+                B) Write buffer 
             */
            // ram has 12 bit tag but we need 4 bit tag
             string tag_bin = get_tag(get_binary(cache_blocks[block_index].block.tag));
@@ -564,6 +603,7 @@ class StreamBuffer {
             blocks[fifo_index] = block;
             //update the fifo index
             fifo_index = (fifo_index + 1) % size;
+
         }
 
 };

@@ -9,9 +9,36 @@ using namespace std;
 #define BLOCK_SIZE 16 //words
 #define RAM_SIZE 65536 //words
 
-//searches mean going through every valid block in the cache
-int searches=0, hits=0, misses=0;
-int l1_hits=0, l1_misses=0, l2_hits=0, l2_misses=0;
+/*
+
+    STATISTICS
+    variables to store the statistics of the entire memory system
+
+    1) L1 Cache (direct mapped, hence no searches)
+        - hits
+        - misses
+        - evicts (= conflict misses)
+        - write buffer evicts
+    2) L2 Cache
+        - hits
+        - misses
+        - searches (number of valid blocks' words in the cache, as its a set associative cache)
+    3) Victim Cache
+        - hits
+        - misses
+    4) Instruction Stream Buffer
+        - hits
+        - misses
+    5) Data Stream Buffer
+        - hits
+        - misses
+    6) Write Buffer
+        - flushes
+
+*/
+int l1_hits=0, l1_misses=0, l2_hits=0, l2_misses=0, l2_searches=0, vc_hits=0, vc_misses=0, isb_hits=0, isb_misses=0, dsb_hits=0, dsb_misses=0;
+int l1_evicts=0, write_buffer_evicts=0;
+int reads=0, writes=0, flushes=0;
 
 class SetAssociativeCache;
 
@@ -238,6 +265,10 @@ public:
         cout << "got type" << endl;
         return type;
     }
+
+    void write_block(const Block& block) {
+        block_map[block.tag] = block;
+    }
 };
 
 RAM ram;
@@ -388,6 +419,46 @@ class SetAssociativeCache{
         }
 };
 SetAssociativeCache L2;
+
+/*
+
+    Write Buffer
+    we use Write back policy for the cache
+    Store evicted dirty blocks of L1 in the write buffer
+    and flush the entire write buffer to RAM (When the write buffer is full) 
+*/
+class WriteBuffer{
+    vector<Block> blocks;
+    int size;
+    int fifo_index;
+
+    public:
+        WriteBuffer(int size = 4){
+            this->size = size;
+            this->blocks = vector<Block>(this->size);
+            this->fifo_index = 0;
+        }
+
+        void add_block(Block block){
+            blocks[fifo_index] = block;
+            if(fifo_index == size-1){
+                cout << "Write Buffer full, updating in RAM" << endl;
+                write_to_RAM();
+            }
+            fifo_index = (fifo_index + 1) % size;
+        }
+
+        void write_to_RAM(){
+            for(int i=0;i<this->size;i++){
+                //write the block to RAM
+                ram.write_block(blocks[i]);
+            }
+        }
+
+        friend class DirectMappedCache;
+};
+WriteBuffer WB;
+
 
 /*
     COMMON CLASS - StreamBuffer
@@ -555,8 +626,8 @@ class DirectMappedCache {
             this->cache_blocks = vector<CacheBlock>(this->size);
         }
         
-        //we need a function to search the cache
-        void search(string nib_addr){
+        //function to search the cache address, and the type of instruction (READ or WRITE)
+        void search(string nib_addr, int instr_type=0){
             //convert address to binary
             string address = get_binary(nib_addr);
             cout << "Address: " << address << endl;
@@ -572,6 +643,9 @@ class DirectMappedCache {
             if(cache_blocks[block_index].valid &&  tag_bin == tag){
                 cout << "L1 Cache hit" << endl;
                 l1_hits++;
+                if(instr_type && cache_blocks[block_index].block.type == 1){
+                    cache_blocks[block_index].dirty = true;
+                }
                 return;
             } else {        
                 /*
@@ -599,14 +673,30 @@ class DirectMappedCache {
                     //if the block is valid but the tag doesn't match, then it is a conflict miss
                     //put this block in the victim cache
                     VC.add_block(cache_blocks[block_index].block);
+                    
+                    // if block is dirty, write to write buffer
+                    if(cache_blocks[block_index].dirty){
+                        WB.add_block(cache_blocks[block_index].block);
+                    }
                 }
                 
                 //-----------final step - update the cache.
                 cache_blocks[block_index].set_block(fetched_block);
+                if(instr_type && fetched_block.type == 1){
+                    cache_blocks[block_index].dirty = true;
+                }
             }
             
         }
 };
+
+void proc_load(string address){
+    L1.search(address, 0);
+}
+
+void proc_store(string address){
+    L1.search(address, 1);
+}
 
 //prints the statistics update pls 
 // void stats(){

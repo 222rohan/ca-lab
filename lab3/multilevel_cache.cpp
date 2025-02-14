@@ -152,12 +152,16 @@ int get_offset(string address) {
                                     +-------------+
                                     |   L1 Cache  |   > DIRECT MAPPED 
                                     +------+------+  
-                                        │                                  
-           EVICT TO ▼                   ├────────► +-------------------+
-          +----------------+            │          | Instruction Stream|
-          |   Victim       |<-----------│          | Buffer (ISB)      |
-          |   Cache        │            |          +-------------------+  
-          +----------------+            │              ^PREFETCH FROM▼
+                                        │
+            EVICT TO ▼                  |          
+            +----------------+          |                                                  
+            |   Victim       |<---------|        
+            |   Cache        │          |           ^PREFETCH FROM▼
+            +----------------+          |────────► +-------------------+
+                                        |          | Instruction Stream|
+                                        |          | Buffer (ISB)      |
+                                        |          +-------------------+  
+                                        │              
                                         ├-───────► +-------------------+
            WRITE THROUGH▼               │          | Data Stream Buffer|
           +----------------+            │          | (DSB)             |
@@ -179,19 +183,13 @@ int get_offset(string address) {
 
 */
 
-
 class Word {
     public: 
     string address;
     // string content;
     //int type; // 0 - instruction, 1 - data
-
-    // Word(string address, int type) {
-    //     this->address = address;
-    //     this->type = type;
-    // }
-
 };
+
 class Block {
 public:
     string tag;
@@ -260,10 +258,7 @@ public:
     }
 
     int get_block_type(const string& tag) {
-        cout << "inside type" << endl;
-        int type = block_map.at(tag).type;
-        cout << "got type" << endl;
-        return type;
+        return block_map.at(tag).type;
     }
 
     void write_block(const Block& block) {
@@ -326,7 +321,7 @@ class SetBlock{
         Block fetch_RAM(string address){
             string tag = get_tag(address);
             Block block = ram.get_block(tag);
-            cout << "Block fetched from RAM" << endl;
+            // cout << "Block fetched from RAM" << endl;
             for(int i=0;i<this->size;i++){
                 if(!blocks[i].valid){
                     blocks[i].set_block(block);
@@ -387,15 +382,6 @@ class SetAssociativeCache{
             this->set_blocks = vector<SetBlock>(this->size);
         }
 
-        void test(){
-            string address = "0F0F";
-            string bin = get_binary(address);
-            string tag = this->get_tag(bin);
-            int index = get_index(bin);
-            cout << "Tag: " << tag << endl;
-            cout << "Index: " << index << endl;
-        }
-
         Block search(string nib_addr){
             string address = get_binary(nib_addr);
             string tag = get_tag(nib_addr);
@@ -403,16 +389,19 @@ class SetAssociativeCache{
             //search for the block in the cache
             for(int i=0;i<set_block_size;i++){
                 string tag_bin = get_tag(get_binary(set_blocks[index].blocks[i].block.tag));
-                if(set_blocks[index].blocks[i].valid && tag_bin == tag){
+                if(set_blocks[index].blocks[i].valid){
+                    l2_searches++;
                     //if the block is found, update the LRU
-                    cout << "L2 Cache hit" << endl;
-                    l2_hits++;
-                    set_blocks[index].update_LRU(i);
-                    return set_blocks[index].blocks[i].block;
+                    if(tag_bin == tag){
+                        // cout << "L2 Cache hit" << endl;
+                        l2_hits++;
+                        set_blocks[index].update_LRU(i);
+                        return set_blocks[index].blocks[i].block;
+                    }
                 }
             }
             //if the block is not found, fetch the block from RAM
-            cout << "L2 Cache miss" << endl;
+            // cout << "L2 Cache miss" << endl;
             l2_misses++;
             return set_blocks[index].fetch_RAM(nib_addr);
             //if the cache is full, evict the LRU block
@@ -442,8 +431,9 @@ class WriteBuffer{
         void add_block(Block block){
             blocks[fifo_index] = block;
             if(fifo_index == size-1){
-                cout << "Write Buffer full, updating in RAM" << endl;
+                // cout << "Write Buffer full, updating in RAM" << endl;
                 write_to_RAM();
+                flushes++;
             }
             fifo_index = (fifo_index + 1) % size;
         }
@@ -452,6 +442,7 @@ class WriteBuffer{
             for(int i=0;i<this->size;i++){
                 //write the block to RAM
                 ram.write_block(blocks[i]);
+                write_buffer_evicts++;
             }
         }
 
@@ -501,16 +492,18 @@ class StreamBuffer {
             fifo_index = (fifo_index + 1) % size;
         }
 
-        Block search(string nib_addr){
+        Block search(string nib_addr, int type){
             string address = get_binary(nib_addr);
             string tag = get_tag(nib_addr);
             for(int i=0;i<this->size;i++){
                 if(blocks[i].tag == tag){
-                    cout << "Stream Buffer hit" << endl;
+                    // cout << "Stream Buffer hit" << endl;
+                    type == 1 ? dsb_hits++ : isb_hits++;
                     return blocks[i];
                 }
             }
-            cout << "Stream Buffer miss" << endl;
+            // cout << "Stream Buffer miss" << endl;
+            type == 1 ? dsb_misses++ : isb_misses++;
             //---------------fetch the block from L2 cache
             return L2.search(nib_addr);
         }
@@ -542,24 +535,25 @@ class VictimCache{
             string address = get_binary(nib_addr);
             string tag = get_tag(nib_addr);
             for(int i=0;i<this->size;i++){
-                cout << "extracted tag: " << tag << " actual tag: " << blocks[i].tag << endl; 
                 if(blocks[i].tag == tag){
-                    cout << "Victim Cache hit" << endl;
+                    // cout << "Victim Cache hit" << endl;
+                    vc_hits++;
                     return blocks[i];
                 }
             }
-            cout << "Victim Cache miss" << endl;
+            // cout << "Victim Cache miss" << endl;
+            vc_misses++;
             //fetch the block from L2` cache
             
             //--------get block type,
             //-----if the block is an instruction block, prefetch the next block into ISB
             //-----if the block is a data block, prefetch the next block into DSB
-            
-            if(ram.get_block_type(tag)){
-                return DSB.search(nib_addr);
+            int type = ram.get_block_type(tag);
+            if(type){
+                return DSB.search(nib_addr, type);
             } 
             else {
-                return ISB.search(nib_addr);
+                return ISB.search(nib_addr, type);
             }
         }
 
@@ -597,7 +591,7 @@ class DirectMappedCache {
     Block prefetch_after_address(string cur_address){
             //get first 3 bytes of the address
         string tag = cur_address.substr(0, 3);
-        cout << "Tag: " << tag << endl;
+        // cout << "Tag: " << tag << endl;
         int nextaddr_int = hexaddr_to_int(tag) + 1;
         string next_address_tag = int_to_hexaddr(nextaddr_int);
 
@@ -630,21 +624,16 @@ class DirectMappedCache {
         void search(string nib_addr, int instr_type=0){
             //convert address to binary
             string address = get_binary(nib_addr);
-            cout << "Address: " << address << endl;
             int block_index = get_block(address);
-            cout << "Block Index: " << block_index << endl;
             string tag = get_tag(address); 
-            cout << "Tag: " << tag << endl;
             
-            
-           // ram has 12 bit tag but we need 4 bit tag
             string tag_bin = get_tag(get_binary(cache_blocks[block_index].block.tag));
-            cout << "Tag in cache: " << tag_bin << endl;
             if(cache_blocks[block_index].valid &&  tag_bin == tag){
-                cout << "L1 Cache hit" << endl;
+                // cout << "L1 Cache hit" << endl;
                 l1_hits++;
                 if(instr_type && cache_blocks[block_index].block.type == 1){
                     cache_blocks[block_index].dirty = true;
+                    writes++;
                 }
                 return;
             } else {        
@@ -658,7 +647,7 @@ class DirectMappedCache {
                                 4. L2 Cache - if miss call RAM
                 
                 */
-                cout << "L1 Cache miss" << endl;
+                // cout << "L1 Cache miss" << endl;
                 l1_misses++;
 
                 //-----------prefetch the next block
@@ -673,6 +662,7 @@ class DirectMappedCache {
                     //if the block is valid but the tag doesn't match, then it is a conflict miss
                     //put this block in the victim cache
                     VC.add_block(cache_blocks[block_index].block);
+                    l1_evicts++;
                     
                     // if block is dirty, write to write buffer
                     if(cache_blocks[block_index].dirty){
@@ -684,11 +674,13 @@ class DirectMappedCache {
                 cache_blocks[block_index].set_block(fetched_block);
                 if(instr_type && fetched_block.type == 1){
                     cache_blocks[block_index].dirty = true;
+                    writes++;
                 }
             }
             
         }
 };
+DirectMappedCache L1;
 
 void proc_load(string address){
     L1.search(address, 0);
@@ -699,22 +691,61 @@ void proc_store(string address){
 }
 
 //prints the statistics update pls 
-// void stats(){
-//     double hit_rate = (double)hits / (hits + misses) * 100;
-//     double miss_rate = (double)misses / (hits + misses) * 100;
+void stats(){
+    double l1_hit_rate = (double)l1_hits / (l1_hits + l1_misses) * 100;
+    double l1_miss_rate = (double)l1_misses / (l1_hits + l1_misses) * 100;
 
-//     cout << "Hits: " << hits << endl;
-//     cout << "Misses: " << misses << endl;
-//     cout << "Searches: " << searches << endl;
-//     cout << "Hit rate: " << hit_rate << "%" << endl;
-//     cout << "Miss rate: " << miss_rate << "%\n" << endl;
+    double l2_hit_rate = (double)l2_hits / (l2_hits + l2_misses) * 100;
+    double l2_miss_rate = (double)l2_misses / (l2_hits + l2_misses) * 100;
 
-//     hits = 0;
-//     misses = 0;
-//     searches = 0;
+    double vc_hit_rate = (double)vc_hits / (vc_hits + vc_misses) * 100;
+    double vc_miss_rate = (double)vc_misses / (vc_hits + vc_misses) * 100;
 
-//     cache.clear();
-// }
+    double isb_hit_rate = (double)isb_hits / (isb_hits + isb_misses) * 100;
+    double isb_miss_rate = (double)isb_misses / (isb_hits + isb_misses) * 100;
+
+    double dsb_hit_rate = (double)dsb_hits / (dsb_hits + dsb_misses) * 100;
+    double dsb_miss_rate = (double)dsb_misses / (dsb_hits + dsb_misses) * 100;
+
+    cout << "L1 Cache" << endl;
+    cout << "Hits: " << l1_hits << endl;
+    cout << "Misses: " << l1_misses << endl;
+    cout << "Hit Rate: " << l1_hit_rate << "%" << endl;
+    cout << "Miss Rate: " << l1_miss_rate << "%" << endl;
+    cout << "Evicts: " << l1_evicts << endl;
+    cout << "Write Buffer Evicts: " << write_buffer_evicts << endl << endl;
+
+    cout << "L2 Cache" << endl;
+    cout << "Hits: " << l2_hits << endl;
+    cout << "Misses: " << l2_misses << endl;
+    cout << "Searches: " << l2_searches << endl;
+    cout << "Hit Rate: " << l2_hit_rate << "%" << endl;
+    cout << "Miss Rate: " << l2_miss_rate << "%" << endl << endl;
+
+    cout << "Victim Cache" << endl;
+    cout << "Hits: " << vc_hits << endl;
+    cout << "Misses: " << vc_misses << endl;
+    cout << "Hit Rate: " << vc_hit_rate << "%" << endl;
+    cout << "Miss Rate: " << vc_miss_rate << "%" << endl << endl;
+
+    cout << "Instruction Stream Buffer" << endl;
+    cout << "Hits: " << isb_hits << endl;
+    cout << "Misses: " << isb_misses << endl;
+    cout << "Hit Rate: " << isb_hit_rate << "%" << endl;
+    cout << "Miss Rate: " << isb_miss_rate << "%" << endl << endl;
+
+    cout << "Data Stream Buffer" << endl;
+    cout << "Hits: " << dsb_hits << endl;
+    cout << "Misses: " << dsb_misses << endl;
+    cout << "Hit Rate: " << dsb_hit_rate << "%" << endl;
+    cout << "Miss Rate: " << dsb_miss_rate << "%" << endl << endl;
+
+    cout << "Write Buffer" << endl;
+    cout << "Flushes: " << flushes << endl;
+
+    cout << "Reads: " << reads << endl;
+    cout << "Writes: " << writes << endl;
+}
 
 // --tests--
 
@@ -724,23 +755,23 @@ This test is to show that the cache is able to handle random addresses
 and fetch the blocks from RAM when needed
 Number misses should be high as the addresses are random
 */
-// void random_test(){
-//     //test for random addresses
+void random_test(){
+    //test for random addresses
 
-//     cout << "Random Test" << endl;
+    cout << "\nRandom Test" << endl;
 
-//     for (int i = 0; i < 256; i++) {
-//         string address = "";
-//         address += get_hex(rand() % 16);
-//         address += get_hex(rand() % 16);
-//         address += get_hex(rand() % 16);
-//         address += get_hex(rand() % 16);
+    for (int i = 0; i < 4096; i++) {
+        string address = "";
+        address += get_hex(rand() % 16);
+        address += get_hex(rand() % 16);
+        address += get_hex(rand() % 16);
+        address += get_hex(rand() % 16);
 
-//         cache.search(address);
-//     }
+        L1.search(address);
+    }
 
-//     stats();
-// }
+    stats();
+}
 /*
 Spatial Locality Test
 
@@ -748,29 +779,29 @@ This test is to show that the cache is able to handle spatial locality
 Number of misses should be low as the addresses are close to each other
 Each miss should fetch a new block from RAM
 */
-// void spatial_test(int prog_size=2048){
-//     //test for showing spatial locality
-//     int num_blocks = prog_size / (WORD_SIZE * BLOCK_SIZE);
-//     //generate random tag
+void spatial_test(int prog_size=2048){
+    //test for showing spatial locality
+    int num_blocks = prog_size / (WORD_SIZE * BLOCK_SIZE);
+    //generate random tag
 
-//     cout << "Spatial Locality Test" << endl;
+    cout << "Spatial Locality Test" << endl;
 
-//     for(int b=0;b<num_blocks;b++){
-//         string rand_tag = "";
-//         rand_tag += get_hex(rand() % 16);
-//         rand_tag += get_hex(rand() % 16);
-//         rand_tag += get_hex(rand() % 16);
+    for(int b=0;b<num_blocks;b++){
+        string rand_tag = "";
+        rand_tag += get_hex(rand() % 16);
+        rand_tag += get_hex(rand() % 16);
+        rand_tag += get_hex(rand() % 16);
 
-//         for(int i=0;i<16;i++){
-//             string address = rand_tag;
-//             address += get_hex(i);
+        for(int i=0;i<16;i++){
+            string address = rand_tag;
+            address += get_hex(i);
 
-//             cache.search(address);
-//         }
-//     }
+            L1.search(address);
+        }
+    }
 
-//     stats();
-// }
+    stats();
+}
 
 /*
 Temporal Locality Test
@@ -780,43 +811,43 @@ it first gets 3 random blocks from RAM and then loops through each word in the b
 Number of misses should be low as the addresses are close to each other, and repeatedly accessed
 */
 
-// void temporal_test(int num_loops=5){
-//     //generate 3 random tags
-//     string tags[3];
-//     for(int i=0;i<3;i++){
-//         tags[i] += get_hex(rand() % 16);
-//         tags[i] += get_hex(rand() % 16);
-//         tags[i] += get_hex(rand() % 16);
-//     }
+void temporal_test(int num_loops=5){
+    //generate 3 random tags
+    string tags[3];
+    for(int i=0;i<3;i++){
+        tags[i] += get_hex(rand() % 16);
+        tags[i] += get_hex(rand() % 16);
+        tags[i] += get_hex(rand() % 16);
+    }
 
-//     //generate 3 random addresses
-//     string addresses[3];
-//     for(int i=0;i<3;i++){
-//         addresses[i] = tags[i];
-//         addresses[i] += get_hex(rand() % 16);
-//     }
+    //generate 3 random addresses
+    string addresses[3];
+    for(int i=0;i<3;i++){
+        addresses[i] = tags[i];
+        addresses[i] += get_hex(rand() % 16);
+    }
 
-//     //search for the 3 addresses
-//     for(int i=0;i<3;i++){
-//         cache.search(addresses[i]);
-//     }
+    //search for the 3 addresses
+    for(int i=0;i<3;i++){
+        L1.search(addresses[i]);
+    }
 
-//     cout << "Temporal Localilty Test" << endl;
+    cout << "Temporal Localilty Test" << endl;
 
-//     //loop through each word in the tags and search for them 5 times
-//     for(int i=0;i<num_loops;i++){
-//         for(int j=0;j<3;j++){
-//             for(int k=0;k<16;k++){
-//                 string address = tags[j];
-//                 address += get_hex(k);
+    //loop through each word in the tags and search for them 5 times
+    for(int i=0;i<num_loops;i++){
+        for(int j=0;j<3;j++){
+            for(int k=0;k<16;k++){
+                string address = tags[j];
+                address += get_hex(k);
 
-//                 cache.search(address);
-//             }
-//         }
-//     }
+                L1.search(address);
+            }
+        }
+    }
 
-//     stats();
-// }
+    stats();
+}
 
 int main() {
 
@@ -828,11 +859,15 @@ int main() {
     // spatial_test();
 
     // temporal_test();
-    
-    DirectMappedCache L1;
+
     //test to cjeck if an address is correctly fetched from yhe L1 cache, goes to l2 if not in l1
-   L1.search("0000"); // 0000 0000 0000 0000
-   L1.search("0011"); // 0000 0000 0001 0001
+    L1.search("0000"); // 0000 0000 0000 0000
+    L1.search("0001"); // 0000 0000 0000 0001
+    L2.search("0000"); // 0000 0000 0000 0000
+    L1.search("1000"); 
+    L1.search("0000");
+
+    stats();
    
 
     return 0;

@@ -81,6 +81,36 @@ string get_binary(string address){
     return binary;
 }
 
+int hexaddr_to_int(string hexaddr) {
+    int intaddr = 0;
+    for (int i = 0; i < hexaddr.length(); i++) {
+        intaddr = intaddr * 16;
+        if (hexaddr[i] >= '0' && hexaddr[i] <= '9') {
+            intaddr += hexaddr[i] - '0';
+        } else {
+            intaddr += hexaddr[i] - 'A' + 10;
+        }
+    }
+    return intaddr;
+}
+
+string int_to_hexaddr(int intaddr) {
+    string hexaddr = "";
+    while (intaddr > 0) {
+        int rem = intaddr % 16;
+        if (rem < 10) {
+            hexaddr = (char)('0' + rem) + hexaddr;
+        } else {
+            hexaddr = (char)('A' + rem - 10) + hexaddr;
+        }
+        intaddr /= 16;
+    }
+    while (hexaddr.length() < 3) {
+        hexaddr = '0' + hexaddr;
+    }
+    return hexaddr;
+}
+
 int get_offset(string address) {
     return stoi(address.substr(3, 1), nullptr, 16); // Use stoi() with base 16 to convert hex to int
 }
@@ -123,28 +153,47 @@ int get_offset(string address) {
 */
 
 
+class Word {
+    public: 
+    string address;
+    // string content;
+    //int type; // 0 - instruction, 1 - data
+
+    // Word(string address, int type) {
+    //     this->address = address;
+    //     this->type = type;
+    // }
+
+};
 class Block {
 public:
     string tag;
     int size = BLOCK_SIZE;
-    vector<string> words = vector<string>(size);
+    vector<Word> words = vector<Word>(size);
+    int type;
 
     Block() {
         this->tag = "";
+        this->type = 0;
     }
 
     Block(string tag) {
         this->tag = tag;
         for (int i = 0; i < this->size; i++) {
             char last_bit = get_hex(i);
-            this->words[i] = tag + last_bit; // Concatenate to form word address
+            string addr = tag + last_bit; // Concatenate to form word address
+            // Word word(addr, instr_type); // Initialize as instruction
+            // this->words[i] = word;
+            this->words[i].address = addr;
         }
+        int instr_type = rand() % 2; // Randomly assign instruction or data
+        this->type = instr_type;
     }
 
     void print() {
         cout << "Tag: " << this->tag << endl;
         for (const auto& word : this->words) {
-            cout << word << " ";
+            cout << word.address << " ";
         }
         cout << endl;
     }
@@ -181,6 +230,13 @@ public:
 
     const Block& get_block(const string& tag) {
         return block_map.at(tag); // Use at() for bounds-checked access
+    }
+
+    int get_block_type(const string& tag) {
+        cout << "inside type" << endl;
+        int type = block_map.at(tag).type;
+        cout << "got type" << endl;
+        return type;
     }
 };
 
@@ -221,105 +277,6 @@ class CacheBlock {
         friend class SetBlock;
         friend class SetAssociativeCache;
 };
-
-// class Cache {
-//     private:
-
-//         int size = CACHE_MAX_SIZE;
-//         vector<CacheBlock> cache_blocks;
-
-//         void evict_block(int index) {
-//             //just remove the index block
-//             cache_blocks[index].set_invalid();
-//         }
-
-//         void update_LRU(int index) {
-//             cache_blocks[index].last_used = 0;
-//             for (int i = 0; i < this->size; i++) {
-//                 if (i != index && cache_blocks[i].valid) {
-//                     cache_blocks[i].last_used++;
-//                 }
-//             }
-//         }
-
-//     public:
-//         Cache() {
-//             this->cache_blocks = vector<CacheBlock>(this->size);
-//         }
-
-//         // void print_all() {
-//         //     for (const auto& cache_block : cache_blocks) {
-//         //         cache_block.print();
-//         //     }
-//         // }
-
-//         //fetches the block from RAM and stores it in the cache
-//         //if the cache is full, evict the LRU block
-//         //if the block is already in the cache, update the LRU
-//         void fetch_RAM(string address) {
-//             string tag = get_tag(address);
-//             Block block = ram.get_block(tag);
-            
-//             for (int i = 0; i < this->size; i++) {
-//                 if (!cache_blocks[i].valid) {
-//                     cache_blocks[i].set_block(block);
-//                     //printf("Block %s fetched from RAM\n", tag.c_str());
-//                     update_LRU(i);
-//                     return;
-//                 }
-//             }
-//             //LRU
-//             int remove_index = LRU();
-//             evict_block(remove_index);
-//             cache_blocks[remove_index].set_block(block);
-//             update_LRU(remove_index);
-//             //printf("Cache block %d evicted, Block %s fetched from RAM\n", remove_index, tag.c_str());
-//         }
-
-//         void search(string address) {
-//             string tag = get_tag(address);
-//             bool miss = true;
-//             for (int i = 0; i < this->size; i++) {
-//                 if (cache_blocks[i].valid) {
-//                     searches++;
-//                     if(cache_blocks[i].block.tag == tag){
-//                         miss = false;
-//                         //cout << "Cache hit, updating " << i <<"th block" << endl;
-//                         hits++;
-//                         update_LRU(i);
-//                         return;
-//                     }
-//                 }
-//             }
-//             if(miss) {
-//                 //cout << "Cache miss" << endl;
-//                 misses++;
-//                 fetch_RAM(address);
-                
-//             }
-//         }
-
-//         //returns the oldest block
-//         int LRU() {
-//             int max = 0;
-//             int index = 0;
-//             for (int i = 0; i < this->size; i++) {
-//                 if (cache_blocks[i].valid && cache_blocks[i].last_used > max) {
-//                     max = cache_blocks[i].last_used;
-//                     index = i;
-//                 }
-//             }
-//             return index;
-//         }
-
-//         void clear() {
-//             for (int i = 0; i < this->size; i++) {
-//                 cache_blocks[i].set_invalid();
-//             }
-//         }
-// };
-// Cache cache;
-
 
 class SetBlock{
     int size;
@@ -432,6 +389,64 @@ class SetAssociativeCache{
 };
 SetAssociativeCache L2;
 
+/*
+    COMMON CLASS - StreamBuffer
+    will be used for i) Instruction Stream Buffer ii) Data Stream Buffer
+    
+    i)  instruction stream buffer - for L1 cache
+        will be used to prefetch instructions from RAM
+        Prefetching technique - when the ith block is accessed, 
+            the (i+1)th block is prefetched into ISB
+    
+    ii) data stream buffer - for L1 cache
+        will be used to prefetch data from RAM
+        Prefetching technique - when the ith block is accessed,
+            the (i+1)th block is prefetched into DSB
+            
+    Both the ISB and DSB will have a size of 4 blocks
+    eviction policy - FIFO (fifo_index)
+
+*/
+class StreamBuffer {
+    private:
+        vector<Block> blocks;
+        int size;
+        int fifo_index; 
+        
+    public:
+
+        string get_tag(string address){
+            return address.substr(0, 3);
+        }
+
+        StreamBuffer(int size = 4){
+            this->size = size;
+            this->blocks = vector<Block>(size);
+            this->fifo_index = 0;
+        }
+        
+        void add_block(Block block){
+            blocks[fifo_index] = block;
+            fifo_index = (fifo_index + 1) % size;
+        }
+
+        Block search(string nib_addr){
+            string address = get_binary(nib_addr);
+            string tag = get_tag(nib_addr);
+            for(int i=0;i<this->size;i++){
+                if(blocks[i].tag == tag){
+                    cout << "Stream Buffer hit" << endl;
+                    return blocks[i];
+                }
+            }
+            cout << "Stream Buffer miss" << endl;
+            //---------------fetch the block from L2 cache
+            return L2.search(nib_addr);
+        }
+
+};
+StreamBuffer ISB, DSB;
+
 class VictimCache{
     vector<Block> blocks;
     int size = 4;
@@ -463,8 +478,18 @@ class VictimCache{
                 }
             }
             cout << "Victim Cache miss" << endl;
-            //fetch the block from L2 cache
-            return L2.search(nib_addr);
+            //fetch the block from L2` cache
+            
+            //--------get block type,
+            //-----if the block is an instruction block, prefetch the next block into ISB
+            //-----if the block is a data block, prefetch the next block into DSB
+            
+            if(ram.get_block_type(tag)){
+                return DSB.search(nib_addr);
+            } 
+            else {
+                return ISB.search(nib_addr);
+            }
         }
 
         friend class DirectMappedCache;
@@ -503,16 +528,24 @@ class DirectMappedCache {
         string tag = cur_address.substr(0, 3);
         cout << "Tag: " << tag << endl;
         int nextaddr_int = hexaddr_to_int(tag) + 1;
-        string next_address = "";
         string next_address_tag = int_to_hexaddr(nextaddr_int);
-        if(nextaddr_int == 4096)
-            next_address = "0000";
-        else
-            next_address = next_address_tag + "0";
 
-        // call StreamBuffer to fetch the block
-        // need to take care of ISB, DSB
-        // ISB.fetch_block(next_address); or DSB.fetch_block(next_address);
+        if(nextaddr_int == 4096)
+            next_address_tag = "000";
+             
+        //cout << "prefetched address prefetch: " << next_address << endl;
+
+        return ram.get_block(next_address_tag);
+    }
+
+    void add_to_stream_buffer(Block block){
+        //add the block to the stream buffer
+        if(block.type == 0){
+            ISB.add_block(block);
+        } else {
+            DSB.add_block(block);
+        }
+        
     }
 
     public:
@@ -532,13 +565,7 @@ class DirectMappedCache {
             string tag = get_tag(address); 
             cout << "Tag: " << tag << endl;
             
-            /* 
-                to do:
-                A) SEARCH 
-                    1) searched prefetched ISB/DSB
-                    2) victim cache
-                B) Write buffer 
-            */
+            
            // ram has 12 bit tag but we need 4 bit tag
             string tag_bin = get_tag(get_binary(cache_blocks[block_index].block.tag));
             cout << "Tag in cache: " << tag_bin << endl;
@@ -546,69 +573,42 @@ class DirectMappedCache {
                 cout << "L1 Cache hit" << endl;
                 l1_hits++;
                 return;
-            } else{
+            } else {        
+                /*
+                
+                Miss Order : 
+                0. L1 Cache - if miss, go to step 1  -> PREFETCH parallelly
+                    1. Victim Cache - if miss call ISB
+                        2. ISB - if miss call DSB
+                            3. DSB - if miss call L2 Cache
+                                4. L2 Cache - if miss call RAM
+                
+                */
                 cout << "L1 Cache miss" << endl;
                 l1_misses++;
+
+                //-----------prefetch the next block
+                Block next_block = prefetch_after_address(nib_addr);
+                add_to_stream_buffer(next_block);
+
+                //-----------search in the victim cache
+                Block fetched_block = VC.search(nib_addr);
+
+                //--------handle conflict miss
                 if(cache_blocks[block_index].valid && tag_bin != tag){
                     //if the block is valid but the tag doesn't match, then it is a conflict miss
                     //put this block in the victim cache
                     VC.add_block(cache_blocks[block_index].block);
                 }
                 
-                //fetch 'Block' from L2 cache
-                Block fetched_BL2 = VC.search(nib_addr);
-                cache_blocks[block_index].set_block(fetched_BL2);
-                cout << cache_blocks[block_index].valid << endl;
+                //-----------final step - update the cache.
+                cache_blocks[block_index].set_block(fetched_block);
             }
             
         }
 };
 
-
-/*
-    COMMON CLASS - StreamBuffer
-    will be used for i) Instruction Stream Buffer ii) Data Stream Buffer
-    
-    i)  instruction stream buffer - for L1 cache
-        will be used to prefetch instructions from RAM
-        Prefetching technique - when the ith block is accessed, 
-            the (i+1)th block is prefetched into ISB
-    
-    ii) data stream buffer - for L1 cache
-        will be used to prefetch data from RAM
-        Prefetching technique - when the ith block is accessed,
-            the (i+1)th block is prefetched into DSB
-            
-    Both the ISB and DSB will have a size of 4 blocks
-    eviction policy - FIFO (fifo_index)
-
-*/
-class StreamBuffer {
-    private:
-        vector<Block> blocks;
-        int size;
-        int fifo_index; 
-        
-    public:
-        StreamBuffer(int size = 4){
-            this->size = size;
-            this->blocks = vector<Block>(size);
-            this->fifo_index = 0;
-        }
-        
-        void fetch_block(string address){
-            //fetch the block from RAM
-            Block block = ram.get_block(address);
-            //store the block in the stream buffer
-            blocks[fifo_index] = block;
-            //update the fifo index
-            fifo_index = (fifo_index + 1) % size;
-
-        }
-
-};
-
-//prints the statistics
+//prints the statistics update pls 
 // void stats(){
 //     double hit_rate = (double)hits / (hits + misses) * 100;
 //     double miss_rate = (double)misses / (hits + misses) * 100;
@@ -742,10 +742,8 @@ int main() {
     DirectMappedCache L1;
     //test to cjeck if an address is correctly fetched from yhe L1 cache, goes to l2 if not in l1
    L1.search("0000"); // 0000 0000 0000 0000
-   L1.search("0001"); // 0000 0000 0000 0001
-   L2.search("0000"); // 0000 0000 0000 0000
-   L1.search("1000"); 
-   L1.search("0000");
+   L1.search("0011"); // 0000 0000 0001 0001
+   
 
     return 0;
 }

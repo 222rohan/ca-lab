@@ -249,7 +249,7 @@ void random_test(){
 
     cout << "Random Test" << endl;
 
-    for (int i = 0; i < 256; i++) {
+    for (int i = 0; i < 4096; i++) {
         string address = "";
         address += get_hex(rand() % 16);
         address += get_hex(rand() % 16);

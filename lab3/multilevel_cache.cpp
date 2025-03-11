@@ -403,8 +403,10 @@ class SetAssociativeCache{
             //if the block is not found, fetch the block from RAM
             // cout << "L2 Cache miss" << endl;
             l2_misses++;
-            return set_blocks[index].fetch_RAM(nib_addr);
+            Block block = set_blocks[index].fetch_RAM(nib_addr);
             //if the cache is full, evict the LRU block
+
+            return block;
         }
 };
 SetAssociativeCache L2;
@@ -633,7 +635,7 @@ class DirectMappedCache {
                 l1_hits++;
                 if(instr_type && cache_blocks[block_index].block.type == 1){
                     cache_blocks[block_index].dirty = true;
-                    writes++;
+                    // writes++;
                 }
                 return;
             } else {        
@@ -674,7 +676,7 @@ class DirectMappedCache {
                 cache_blocks[block_index].set_block(fetched_block);
                 if(instr_type && fetched_block.type == 1){
                     cache_blocks[block_index].dirty = true;
-                    writes++;
+                    // writes++;
                 }
             }
             
@@ -706,6 +708,14 @@ void stats(){
 
     double dsb_hit_rate = (double)dsb_hits / (dsb_hits + dsb_misses) * 100;
     double dsb_miss_rate = (double)dsb_misses / (dsb_hits + dsb_misses) * 100;
+
+    double global_hit_rate = (double)(l1_hits + l2_hits + vc_hits + isb_hits + dsb_hits) / (l1_hits + l2_hits + vc_hits + isb_hits + dsb_hits + l2_misses) * 100;
+
+    cout << "Global Misses: " << l2_misses << endl;
+    cout << "Global Hits: " << l1_hits + l2_hits + vc_hits + isb_hits + dsb_hits << endl;
+    cout << "Global Hit Rate: " << global_hit_rate << "%" << endl;
+    cout << "Global Miss Rate: " << (double)100 - global_hit_rate << endl << endl;
+
 
     cout << "L1 Cache" << endl;
     cout << "Hits: " << l1_hits << endl;
@@ -750,58 +760,43 @@ void stats(){
 // --tests--
 
 /*
-Random Test
-This test is to show that the cache is able to handle random addresses
-and fetch the blocks from RAM when needed
-Number misses should be high as the addresses are random
-*/
-void random_test(){
-    //test for random addresses
-
-    cout << "\nRandom Test" << endl;
-
-    for (int i = 0; i < 4096; i++) {
-        string address = "";
-        address += get_hex(rand() % 16);
-        address += get_hex(rand() % 16);
-        address += get_hex(rand() % 16);
-        address += get_hex(rand() % 16);
-
-        L1.search(address);
-    }
-
-    stats();
-}
-/*
 Spatial Locality Test
 
 This test is to show that the cache is able to handle spatial locality
 Number of misses should be low as the addresses are close to each other
 Each miss should fetch a new block from RAM
 */
-void spatial_test(int prog_size=2048){
-    //test for showing spatial locality
+void spatial_test(int prog_size = 2048) {
+    // Test for showing spatial locality
     int num_blocks = prog_size / (WORD_SIZE * BLOCK_SIZE);
-    //generate random tag
-
+    
     cout << "Spatial Locality Test" << endl;
 
-    for(int b=0;b<num_blocks;b++){
-        string rand_tag = "";
-        rand_tag += get_hex(rand() % 16);
-        rand_tag += get_hex(rand() % 16);
-        rand_tag += get_hex(rand() % 16);
+    string base_tag = "";  
+    base_tag += get_hex(rand() % 16);
+    base_tag += get_hex(rand() % 16);
 
-        for(int i=0;i<16;i++){
-            string address = rand_tag;
-            address += get_hex(i);
+    for (int b = 0; b < num_blocks; b++) {
+        for (int i = 0; i < 16; i++) {  // Search across multiple blocks
+            string address = base_tag;
+            address += get_hex(b);  // Increment block number in address
+            address += get_hex(i);  // Word offset within block
 
-            L1.search(address);
+            int instr_type = rand() % 2;  // Randomly assign load or store
+            if(instr_type) {
+                proc_store(address);
+                writes++;
+            } else {
+                proc_load(address);
+                reads++;
+            }
+            // L1.search(address);
         }
     }
 
     stats();
 }
+
 
 /*
 Temporal Locality Test
@@ -854,21 +849,9 @@ int main() {
     //use case example: word - 0F0FH
     //cache.search("0F0FH");
 
-    // random_test();
-
     // spatial_test();
 
-    // temporal_test();
-
-    //test to cjeck if an address is correctly fetched from yhe L1 cache, goes to l2 if not in l1
-    L1.search("0000"); // 0000 0000 0000 0000
-    L1.search("0001"); // 0000 0000 0000 0001
-    L2.search("0000"); // 0000 0000 0000 0000
-    L1.search("1000"); 
-    L1.search("0000");
-
-    stats();
-   
+    temporal_test();
 
     return 0;
 }

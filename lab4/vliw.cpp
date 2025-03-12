@@ -177,7 +177,7 @@ void print_packet(instruction_packet &packet, int max_time){
     //print the packet
     printf("{ %s, %s, %s, %s, %s, %s, %s }\t%d\t%d\n", packet.add.c_str(), packet.mul.c_str(), packet.fadd.c_str(), packet.fmul.c_str(), packet.ld.c_str(), packet.sd.c_str(), packet.lu.c_str(), clock_cycle, clock_cycle + max_time);
     //increment the clock cycle
-    clock_cycle += max_time;
+    clock_cycle += max_time + 1;
 
     //clear the packet
     clear_registers_and_units(packet);
@@ -196,6 +196,10 @@ void schedule_packets(){
         int is_src2 = 0;
         if(src2 != ""){
             is_src2 = 1;
+        }
+
+        if(opcode == "AND" || opcode == "OR" || opcode == "XOR" || opcode == "NOT"){
+            opcode = "LU";
         }
 
         if(functional_units[opcode] == 0){

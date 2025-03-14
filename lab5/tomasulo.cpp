@@ -16,6 +16,8 @@ typedef struct {
 vector<instruction> instructions;
 
 typedef struct {
+    int instr_index;
+    int time;
     int busy;
     string op;
     string Vj;
@@ -23,7 +25,7 @@ typedef struct {
     string Qj;
     string Qk;
 } reservation_station;
-map<string, vector<reservation_station>> res_stations;
+map<string, vector<reservation_station>> reservation_stations;
 
 map<string, string> register_result_status;
 map<string, int> functional_units = {
@@ -59,41 +61,41 @@ void init_reservation_stations(){
     vector<reservation_station> temp;
     temp.push_back(add1);
     temp.push_back(add2);
-    res_stations["ADD"] = temp;
+    reservation_stations["ADD"] = temp;
     temp.clear();
 
     temp.push_back(mul1);
     temp.push_back(mul2);
-    res_stations["MUL"] = temp;
+    reservation_stations["MUL"] = temp;
     temp.clear();
 
     temp.push_back(fadd1);
     temp.push_back(fadd2);
     temp.push_back(fadd3);
     temp.push_back(fadd4);
-    res_stations["FADD"] = temp;
+    reservation_stations["FADD"] = temp;
     temp.clear();
 
     temp.push_back(fmul1);
     temp.push_back(fmul2);
     temp.push_back(fmul3);
     temp.push_back(fmul4);
-    res_stations["FMUL"] = temp;
+    reservation_stations["FMUL"] = temp;
     temp.clear();
 
     temp.push_back(ld1);
     temp.push_back(ld2);
-    res_stations["LD"] = temp;
+    reservation_stations["LD"] = temp;
     temp.clear();
 
     temp.push_back(sd1);
     temp.push_back(sd2);
-    res_stations["SD"] = temp;
+    reservation_stations["SD"] = temp;
     temp.clear();
 
     temp.push_back(lu1);
     temp.push_back(lu2);
-    res_stations["LU"] = temp;
+    reservation_stations["LU"] = temp;
     
     return;
 }
@@ -152,6 +154,55 @@ void instruction_parser( ifstream &file ) {
     file.close();
 }
 
+void execute_instruction(instruction& instr, string opcode, int clock_cycle){
+    return;
+}
+
+void schedule_instructions(){
+    //inorder issue
+    int num_instr = instructions.size();
+    for(auto instr: instructions){
+        instr.issue = clock_cycle;
+        string opcode = instr.opcode;
+
+        if(opcode == "AND" || opcode == "OR" || opcode == "XOR" || opcode == "NOT"){
+            opcode = "LU";
+        }
+
+        for(auto station: reservation_stations[opcode]){
+            if(!station.busy){
+                station.busy = 1;
+                station.op = instr.opcode;
+                string station_name = opcode + to_string(station.instr_index + 1);
+                register_result_status[instr.dest] = station_name;
+
+                if(register_result_status[instr.src1] != ""){
+                    station.Qj = register_result_status[instr.src1];
+                }
+                else{
+                    station.Vj = instr.src1;
+                }
+
+                if(register_result_status[instr.src2] != ""){
+                    station.Qk = register_result_status[instr.src2];
+                }
+                else{
+                    station.Vk = instr.src2;
+                }
+
+                if(station.Vj != "" && station.Vk != ""){
+                    //execute the instruction
+                    execute_instruction(instr, opcode, clock_cycle);
+                    register_result_status[instr.dest] = "";
+                }
+
+            }
+        }
+
+        clock_cycle++;
+    }
+}
+
 int main() {
     ifstream file(FILENAME);
 
@@ -163,6 +214,8 @@ int main() {
     instruction_parser(file);
 
     init_reservation_stations();
+
+    schedule_instructions();
 
     return 0;
 }

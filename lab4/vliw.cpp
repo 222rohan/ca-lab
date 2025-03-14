@@ -21,8 +21,8 @@ typedef struct {
     string lu;
 } instruction_packet;
 
-map<string, int> read;
-map<string, int> write;
+map<string, int> register_read;
+map<string, int> register_write;
 map<string, int> functional_units = {
     {"ADD", 0},
     {"MUL", 0},
@@ -133,9 +133,9 @@ void add_instruction_to_packet(instruction_packet &packet, instruction instr){
 }
 
 void clear_registers_and_units(instruction_packet &packet){
-    //empty the read and write maps
-    read.clear();
-    write.clear();
+    //empty the register_read and register_write maps
+    register_read.clear();
+    register_write.clear();
     //empty the functional units
     for(auto &fu : functional_units){
         fu.second = 0;
@@ -206,7 +206,7 @@ void schedule_packets(){
             // cout << opcode << endl;
 
             //RAW
-            if(write[src1] == 1 || (is_src2 && write[src2] == 1)){
+            if(register_write[src1] == 1 || (is_src2 && register_write[src2] == 1)){
                 // cout << "RAW" << endl;
                 print_packet(packet, max_time);
                 max_time = 0;
@@ -214,7 +214,7 @@ void schedule_packets(){
                 continue;
             }
             //WAW
-            if(write[dest] == 1){
+            if(register_write[dest] == 1){
                 // cout << "WAW" << endl;
                 print_packet(packet, max_time);
                 max_time = 0;
@@ -222,7 +222,7 @@ void schedule_packets(){
                 continue;
             }
             //WAR
-            if(read[dest] == 1){
+            if(register_read[dest] == 1){
                 // cout << "WAR" << endl;
                 print_packet(packet, max_time);
                 max_time = 0;
@@ -234,10 +234,10 @@ void schedule_packets(){
             // cout << "no hazards" << endl;
 
             functional_units[opcode] = 1;
-            write[dest] = 1;
-            read[src1] = 1;
+            register_write[dest] = 1;
+            register_read[src1] = 1;
             if(is_src2){
-                read[src2] = 1;
+                register_read[src2] = 1;
             }
 
             add_instruction_to_packet(packet, instr);

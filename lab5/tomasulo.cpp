@@ -40,12 +40,12 @@ map<string, int> functional_units = {
     {"LU", 0}
 };
 map<string, int> exec_time = {
-    {"ADD", 2},
-    {"MUL", 10},
+    {"ADD", 6},
+    {"MUL", 12},
     {"FADD", 18},
-    {"FMUL", 40},
-    {"LD", 2},
-    {"SD", 2},
+    {"FMUL", 30},
+    {"LD", 1},
+    {"SD", 1},
     {"LU", 1}
 };
 
@@ -211,6 +211,8 @@ void instruction_parser( ifstream &file ) {
 }
 
 void execute_instruction(reservation_station &station, string opcode){
+    station.idle = 0;
+    cout << "Executing instruction: " << station.instr_index + 1 << endl;
     int time_to_finish = exec_time[opcode];
     station.time_to_finish = clock_cycle + time_to_finish;
     return;
@@ -225,7 +227,7 @@ bool program_complete(bool completed[], int num_instr){
     return true;
 }
 
-void check_for_completion(bool completed[]) {
+void check_for_completion(bool *completed) {
     //check if any instruction has completed execution
     for(auto station: reservation_stations) {
         for(auto rs: station.second){
@@ -235,31 +237,37 @@ void check_for_completion(bool completed[]) {
                 rs.Vk = "";
                 rs.Qj = "";
                 rs.Qk = "";
+                rs.time_to_finish = -1;
                 instructions[rs.instr_index].exec_comp = clock_cycle;
                 instructions[rs.instr_index].write_res = clock_cycle + 1;
                 rs.idle = 0;
+                cout << "Setting register " << register_result_status[instructions[rs.instr_index].dest] << " as free" << endl;
                 register_result_status[instructions[rs.instr_index].dest] = "";
-                cout << rs.instr_index << "completed" << endl;
+                cout << "Instruction " << rs.instr_index + 1 << " completed" << endl;
                 completed[rs.instr_index] = true;
 
-                cout << "Instruction " << instructions[rs.instr_index].opcode << " " << instructions[rs.instr_index].dest << " " << instructions[rs.instr_index].src1 << " " << instructions[rs.instr_index].src2 << " completed at clock cycle " << clock_cycle << endl;
+                //cout << "Instruction " << instructions[rs.instr_index].opcode << " " << instructions[rs.instr_index].dest << " " << instructions[rs.instr_index].src1 << " " << instructions[rs.instr_index].src2 << " completed at clock cycle " << clock_cycle << endl;
             }
         }
     }
 
     //go through all reservation stations, and check for dependencies in result
-    for(auto station: reservation_stations){
-        for(auto rs: station.second){
+    for(auto &station: reservation_stations) {
+        for(auto &rs: station.second){
             if(rs.busy){
+                bool special = false;
                 if(rs.Qj != "" && register_result_status[rs.Qj] == ""){
                     rs.Vj = rs.Qj;
                     rs.Qj = "";
+                    special = true;
                 }
                 if(rs.Qk != "" && register_result_status[rs.Qk] == ""){
                     rs.Vk = rs.Qk;
                     rs.Qk = "";
+                    special = true;
                 }
-                if(rs.Vj != "" && rs.Vk != ""){
+                if(special && rs.Vj != "" && rs.Vk != ""){
+                    cout << "idleset completetion finction " << rs.instr_index << endl;
                     rs.idle = 1;
                 }
             }
@@ -268,9 +276,10 @@ void check_for_completion(bool completed[]) {
 }
 
 void execute_idle_instructions(){
-    for(auto station: reservation_stations){
-        for(auto rs: station.second){
+    for(auto &station: reservation_stations){
+        for(auto &rs: station.second){
             if(rs.idle && rs.Vj != "" && rs.Vk != ""){
+                cout << "idelset instrno. " << rs.instr_index << endl;
                 execute_instruction(rs, rs.op);
             }
         }
@@ -295,13 +304,16 @@ void schedule_instructions(){
         }
         cout << endl;
 
-
         //check for reservation stations with instructions ready to be executed (no dependencies)
         execute_idle_instructions();
 
         //issue the instruction
         if(!completed[issued_instruction]){
+
             instruction instr = instructions[issued_instruction];
+
+            cout << "Issuing instruction no(" << issued_instruction+1 << ")" << instr.opcode << ":" << instr.dest << ":" << instr.src1 << ":" << instr.src2 << endl;
+
             string opcode = instr.opcode;
 
             if(opcode == "AND" || opcode == "OR" || opcode == "XOR" || opcode == "NOT"){
@@ -314,15 +326,14 @@ void schedule_instructions(){
                     station.busy = 1;
                     station.idle = 0;
                     station.op = instr.opcode;
-                    register_result_status[instr.dest] = instr.dest;
-
-                    //check if the source registers are ready
-                    cout << "Checking for dependencies" << endl;
-                   // cout << "Register result status: " << register_result_status[instr.src1] << " " << register_result_status[instr.src2] << endl;
                     
+                    //set destination register as busy for dependency check
+                    register_result_status[instr.dest] = instr.dest;                    
                    //register result status is empty for all cases for wahteevr reason pls fix
-                   //also the Qj and Qk are not being set properly
                    //something to do with map maybe?
+
+                   cout << "checking for dependencies" << " SRC1:" << register_result_status[instr.src1] << " SRC2:" << register_result_status[instr.src2] << endl;
+
 
                     if(register_result_status[instr.src1] != ""){
                         station.Qj = register_result_status[instr.src1];
@@ -340,10 +351,7 @@ void schedule_instructions(){
 
                     if(station.Vj != "" && station.Vk != ""){
                         //execute the instruction
-                        cout << "vj" << station.Vj << " vk" << station.Vk <<  " qj" << station.Qj << " qk" << station.Qk << endl;
-                        cout << "Executing instruction: " << instr.opcode << " " << instr.dest << " " << instr.src1 << " " << instr.src2 << endl;
                         execute_instruction(station, opcode);
-                        register_result_status[instr.dest] = "";
                     }
 
                     station.instr_index = issued_instruction;
@@ -351,7 +359,7 @@ void schedule_instructions(){
                     break;
                 }
             }
-
+            
         }
 
         //check if any instruction has completed execution

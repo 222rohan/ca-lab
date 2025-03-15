@@ -59,45 +59,6 @@ int is_valid_opcode(string opcode) {
 }
 
 void init_reservation_stations(){
-    // reservation_station add1, add2, mul1, mul2, fadd1, fadd2, fadd3, fadd4, fmul1, fmul2, fmul3, fmul4, ld1, ld2, sd1, sd2, lu1, lu2;
-    // vector<reservation_station> temp;
-    // temp.push_back(add1);
-    // temp.push_back(add2);
-    // reservation_stations["ADD"] = temp;
-    // temp.clear();
-
-    // temp.push_back(mul1);
-    // temp.push_back(mul2);
-    // reservation_stations["MUL"] = temp;
-    // temp.clear();
-
-    // temp.push_back(fadd1);
-    // temp.push_back(fadd2);
-    // temp.push_back(fadd3);
-    // temp.push_back(fadd4);
-    // reservation_stations["FADD"] = temp;
-    // temp.clear();
-
-    // temp.push_back(fmul1);
-    // temp.push_back(fmul2);
-    // temp.push_back(fmul3);
-    // temp.push_back(fmul4);
-    // reservation_stations["FMUL"] = temp;
-    // temp.clear();
-
-    // temp.push_back(ld1);
-    // temp.push_back(ld2);
-    // reservation_stations["LD"] = temp;
-    // temp.clear();
-
-    // temp.push_back(sd1);
-    // temp.push_back(sd2);
-    // reservation_stations["SD"] = temp;
-    // temp.clear();
-
-    // temp.push_back(lu1);
-    // temp.push_back(lu2);
-    // reservation_stations["LU"] = temp;
 
     //initialize all reservation stations, and set their variables
     reservation_station rs;
@@ -184,7 +145,7 @@ void instruction_parser( ifstream &file ) {
         //check if the opcode is valid
         if(!is_valid_opcode(tokens[0])) {
             cout << "Invalid opcode: " << tokens[0] << endl;
-            return;
+            exit(1);
         }
 
         opcode = tokens[0];
@@ -267,7 +228,7 @@ void check_for_completion(bool *completed) {
                     special = true;
                 }
                 if(special && rs.Vj != "" && rs.Vk != ""){
-                    cout << "idleset completetion finction " << rs.instr_index << endl;
+                    //cout << "idleset completetion finction " << rs.instr_index << endl;
                     rs.idle = 1;
                 }
             }
@@ -279,7 +240,7 @@ void execute_idle_instructions(){
     for(auto &station: reservation_stations){
         for(auto &rs: station.second){
             if(rs.idle && rs.Vj != "" && rs.Vk != ""){
-                cout << "idelset instrno. " << rs.instr_index << endl;
+               // cout << "idelset instrno. " << rs.instr_index << endl;
                 execute_instruction(rs, rs.op);
             }
         }
@@ -291,14 +252,16 @@ void schedule_instructions(){
     int num_instr = instructions.size();
     bool completed[num_instr];
     int issued_instruction = 0;
+
     for(int i = 0; i < num_instr; i++){
         completed[i] = false;
     }
     
     while(!program_complete(completed, num_instr) && clock_cycle < 100){
 
-        cout << "Clock cycle: " << clock_cycle << endl;
+        cout << "\nClock cycle: " << clock_cycle << endl;
         
+        cout << "Completed instructions: ";
         for(auto i: completed){
             cout << i << " ";
         }
@@ -312,16 +275,19 @@ void schedule_instructions(){
 
             instruction instr = instructions[issued_instruction];
 
-            cout << "Issuing instruction no(" << issued_instruction+1 << ")" << instr.opcode << ":" << instr.dest << ":" << instr.src1 << ":" << instr.src2 << endl;
+            if(num_instr >= issued_instruction+1)
+                cout << "Issuing instruction (" << issued_instruction+1 << ") - " << instr.opcode << " " << instr.dest << ", " << instr.src1 << ", " << instr.src2 << endl;
 
             string opcode = instr.opcode;
 
-            if(opcode == "AND" || opcode == "OR" || opcode == "XOR" || opcode == "NOT"){
+            if(opcode == "AND" || opcode == "OR" || opcode == "XOR" || opcode == "NOT" ){
                 opcode = "LU";
             }
 
             for(auto &station: reservation_stations[opcode]){
                 if(!station.busy) {
+
+                    station.instr_index = issued_instruction;
                     instructions[issued_instruction].issue = clock_cycle;
                     station.busy = 1;
                     station.idle = 0;
@@ -332,7 +298,7 @@ void schedule_instructions(){
                    //register result status is empty for all cases for wahteevr reason pls fix
                    //something to do with map maybe?
 
-                   cout << "checking for dependencies" << " SRC1:" << register_result_status[instr.src1] << " SRC2:" << register_result_status[instr.src2] << endl;
+                   cout << "checking for dependencies" << " SRC1: " << register_result_status[instr.src1] << ", SRC2: " << register_result_status[instr.src2] << endl;
 
 
                     if(register_result_status[instr.src1] != ""){
@@ -371,6 +337,7 @@ void schedule_instructions(){
 }
 
 void print_stats(){
+    cout << "\n---EXECUTION COMPLETE---"<< endl;
     cout << "Instruction\tIssue\tExec\tWrite Res" << endl;
     for(auto instr: instructions){
         cout << instr.opcode << " " << instr.dest << " " << instr.src1 << " " << instr.src2 << "\t" << instr.issue << "\t" << instr.exec_comp << "\t" << instr.write_res << endl;

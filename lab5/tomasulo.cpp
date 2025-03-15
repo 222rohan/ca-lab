@@ -30,15 +30,6 @@ typedef struct {
 map<string, vector<reservation_station>> reservation_stations;
 
 map<string, string> register_result_status;
-map<string, int> functional_units = {
-    {"ADD", 0},
-    {"MUL", 0},
-    {"FADD", 0},
-    {"FMUL", 0},
-    {"LD", 0},
-    {"SD", 0},
-    {"LU", 0}
-};
 map<string, int> exec_time = {
     {"ADD", 6},
     {"MUL", 12},

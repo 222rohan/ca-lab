@@ -151,37 +151,42 @@ void clear_registers_and_units(instruction_packet &packet){
     packet.lu = "";
 }
 
-void print_packet(instruction_packet &packet, int max_time){
-    //add NOP if a functional unit doesnt have any instruction
-    if(packet.add == ""){
-        packet.add = "NOP";
-    }
-    if(packet.mul == ""){
-        packet.mul = "NOP";
-    }
-    if(packet.fadd == ""){
-        packet.fadd = "NOP";
-    }
-    if(packet.fmul == ""){
-        packet.fmul = "NOP";
-    }
-    if(packet.ld == ""){
-        packet.ld = "NOP";
-    }
-    if(packet.sd == ""){
-        packet.sd = "NOP";
-    }
-    if(packet.lu == ""){
-        packet.lu = "NOP";
-    }
-    //print the packet
-    printf("{ %s, %s, %s, %s, %s, %s, %s }\t%d\t%d\n", packet.add.c_str(), packet.mul.c_str(), packet.fadd.c_str(), packet.fmul.c_str(), packet.ld.c_str(), packet.sd.c_str(), packet.lu.c_str(), clock_cycle, clock_cycle + max_time);
-    //increment the clock cycle
-    clock_cycle += max_time + 1;
+void print_packet(instruction_packet &packet, int max_time) {
+    static int packet_number = 1; // Track packet numbers
 
-    //clear the packet
+    // Add NOP if a functional unit doesn't have any instruction
+    if (packet.add == "") packet.add = "NOP";
+    if (packet.mul == "") packet.mul = "NOP";
+    if (packet.fadd == "") packet.fadd = "NOP";
+    if (packet.fmul == "") packet.fmul = "NOP";
+    if (packet.ld == "") packet.ld = "NOP";
+    if (packet.sd == "") packet.sd = "NOP";
+    if (packet.lu == "") packet.lu = "NOP";
+
+    // Print header if it's the first packet
+    static bool header_printed = false;
+    if (!header_printed) {
+        cout << "+--------+-----------------+-----------------+-----------------+-----------------+-----------------+-----------------+-----------------+--------+--------+\n";
+        cout << "| Packet |       ADD       |       MUL       |      FADD       |      FMUL       |       LD        |       SD        |       LU        | Issue  |  Comp  |\n";
+        cout << "+--------+-----------------+-----------------+-----------------+-----------------+-----------------+-----------------+-----------------+--------+--------+\n";
+        header_printed = true;
+    }
+
+    // Print the packet in tabular format
+    printf("| %-6d | %-15s | %-15s | %-15s | %-15s | %-15s | %-15s | %-15s | %-6d | %-6d |\n",
+           packet_number, packet.add.c_str(), packet.mul.c_str(), packet.fadd.c_str(), packet.fmul.c_str(),
+           packet.ld.c_str(), packet.sd.c_str(), packet.lu.c_str(), clock_cycle, clock_cycle + max_time);
+
+    cout << "+--------+-----------------+-----------------+-----------------+-----------------+-----------------+-----------------+-----------------+--------+--------+\n";
+
+    // Increment the clock cycle and packet number
+    clock_cycle += max_time + 1;
+    packet_number++;
+
+    // Clear the packet
     clear_registers_and_units(packet);
 }
+
 
 void schedule_packets(){
     instruction_packet packet;

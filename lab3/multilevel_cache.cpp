@@ -766,7 +766,7 @@ This test is to show that the cache is able to handle spatial locality
 Number of misses should be low as the addresses are close to each other
 Each miss should fetch a new block from RAM
 */
-void spatial_test(int prog_size = 2048) {
+void spatial_test(int prog_size = 10000) {
     // Test for showing spatial locality
     int num_blocks = prog_size / (WORD_SIZE * BLOCK_SIZE);
     
@@ -808,22 +808,22 @@ Number of misses should be low as the addresses are close to each other, and rep
 
 void temporal_test(int num_loops=5){
     //generate 3 random tags
-    string tags[3];
-    for(int i=0;i<3;i++){
+    string tags[5000];
+    for(int i=0;i<5000;i++){
         tags[i] += get_hex(rand() % 16);
         tags[i] += get_hex(rand() % 16);
         tags[i] += get_hex(rand() % 16);
     }
 
     //generate 3 random addresses
-    string addresses[3];
-    for(int i=0;i<3;i++){
+    string addresses[5000];
+    for(int i=0;i<5000;i++){
         addresses[i] = tags[i];
         addresses[i] += get_hex(rand() % 16);
     }
 
-    //search for the 3 addresses
-    for(int i=0;i<3;i++){
+    //search for the 1000 addresses
+    for(int i=0;i<5000;i++){
         L1.search(addresses[i]);
     }
 
@@ -831,7 +831,7 @@ void temporal_test(int num_loops=5){
 
     //loop through each word in the tags and search for them 5 times
     for(int i=0;i<num_loops;i++){
-        for(int j=0;j<3;j++){
+        for(int j=0;j<5000;j++){
             for(int k=0;k<16;k++){
                 string address = tags[j];
                 address += get_hex(k);
